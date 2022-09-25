@@ -22,7 +22,7 @@ def create_new_df(file):
     df_new['Date'] = pd.to_datetime(df_new['Date'], format='%d%m%Y')
     return df_new
 
-def comp_dfs(df1, df2):
+def compare_dfs(df1, df2):
     comp = df1[['Link', 'User']].merge(df2[['Link', 'User']],indicator = True, how='left', left_on='Link', right_on='Link').loc[lambda x : x['_merge']=='left_only']
     rez_df = df1[df1['Link'].isin(comp['Link'])]
     return rez_df
@@ -37,15 +37,27 @@ for file in files:
 dfs = dict(tuple(df.groupby('Date')))
 dates = list(dfs.keys())
 sales = pd.DataFrame()
+new_items =  pd.DataFrame()
 
 for i, dat in enumerate(dates):
     if i == 0:
         continue
     df1 = dfs[dates[i-1]]
     df2 = dfs[dates[i]]
-    
-    sales = pd.concat((sales,comp_dfs(df1,df2)))
-    #sales['Date'] = sales['Date'].dt.strftime('%Y-%m-%d')
 
-sales.to_json('sales.json', orient='records')
+    filt = np.intersect1d(df1.User.unique(), df2.User.unique())
+    
+    sales = pd.concat((sales,compare_dfs(df1,df2)))
+    sales = sales[sales.User.isin(filt)]
+    new_items = pd.concat((new_items,compare_dfs(df2,df1)))
+    new_items = new_items[new_items.User.isin(filt)]
+    
+sales['Flow'] = 'Sales'
+new_items['Flow'] = 'New Items'
+sales.Date += pd.Timedelta(days=1)
+report = pd.concat((sales, new_items))
+
+#sales.to_json('sales.json', orient='records')
 sales.to_csv('sales.txt', sep='\t', index=False)
+new_items.to_csv('new_items.txt', sep='\t', index=False)
+report.to_csv('report.txt', sep='\t', index=False)
